@@ -7,7 +7,6 @@ require 'uuidtools'
 # This class mimics somewhat the structure of the Java discovery client.
 #
 class DiscoveryClient
-  @verbose = false
 
   #
   # Constructor takes a scalar or list of service base URLs, and a verbosity flag
@@ -16,9 +15,11 @@ class DiscoveryClient
   # Verbosity = 2: Print debug and errors
   #
   def initialize(discoveryUrls, verbose = 0)
-     @verbose = verbose
      @discovery_urls = discoveryUrls.class.eql?(Array) ? discoveryUrls : [discoveryUrls]
-     @services = @environment = @service_data = nil
+     @verbose = verbose
+
+     @services = nil
+     @service_data = nil
      @client = HTTPClient.new("")
   end
 
@@ -26,7 +27,12 @@ class DiscoveryClient
   # Return list of services matching pool and type
   # nil values for pool and type act as wild cards
   #
-  def get_services (type, pool)
+  def get_services (type = nil, pool = nil)
+
+    # NOTE: query_for_services asks for everything, rather than using the
+    #       more selective resource paths provided by the discovery services.
+    #       This allows the user to query for all services in a given pool,
+    #       which is not an available resource path
     query_for_services()
     result = []
 
@@ -42,39 +48,39 @@ class DiscoveryClient
   #
   # Return a list of HTTP paths for the given service
   #
-  def get_http_services (serviceName)
+  def get_http_services (service_name)
     query_for_services()
-    list = @services[serviceName]
+    list = @services[service_name]
 
-    httpService = []
+    http_service = []
     list.each do |service|
       properties = service["properties"]
       if !properties.nil?()
-        httpUri = properties["http"]
-        httpService << httpUri unless httpUri.nil?()
+        http_uri = properties["http"]
+        http_service << http_uri unless http_uri.nil?()
       end
     end
 
-    return httpService
+    return http_service
   end
 
   #
   # Return a list of JDBC paths for the given service
   #
-  def get_jdbc_services (serviceName)
+  def get_jdbc_services (service_name)
     query_for_services()
-    list = @services[serviceName]
+    list = @services[service_name]
 
-    jdbcService = []
+    jdbc_service = []
     list.each do |service|
       properties = service["properties"]
       if !properties.nil?()
-        jdbcUri = properties["jdbc"]
-        jdbcService << jdbcUri unless jdbcUri.nil?()
+        jdbc_uri = properties["jdbc"]
+        jdbc_service << jdbc_uri unless jdbc_uri.nil?()
       end
     end
 
-    return jdbcService
+    return jdbc_service
   end
 
   #
@@ -82,78 +88,88 @@ class DiscoveryClient
   #
   def get_environment ()
     query_for_services()
-    return @environment
+    return @service_data["environment"]
   end
 
   #
-  # announce
-  #    PUT a service announcement to the discovery service in the
-  #    pool "general" and environment "zapp_ci"
+  # static_announce
+  #    PUT a service announcement to the discovery service
   #
-  #    TODO: pool and environment need to be parameterized
+  #    Params - a single hash containing the following elements:
   #
-  #    Params
-  #
-  #    service_type        The service type, e. g. smtp_service, user, customer, etc.
-  #    service_properties  A hashmap of the service properties
+  #    :pool                The pool for this service
+  #    :environment         The service environment
+  #    :type                The service type, e. g. smtp_service, user, customer, etc.
+  #    :properties          A hashmap of the service properties
+  #    :location            Service location
   #
   #    Return
   #
   #    A UUID node ID used to identify this service.  This value can be passed to the
   #    delete method to delete the service announcement from the discovery server.
   #
-  def announce(service_type, service_properties)
-     announcement = {}
-     service = {}
-     nodeId =  UUIDTools::UUID.timestamp_create().to_s
+  def static_announce(params)
+    assertion_fails = Array.new
+    assertion_fails << "params[:pool] must not be nil" if params[:pool].nil?
+    assertion_fails << "params[:environment] must not be nil" if params[:environment].nil?
+    assertion_fails << "params[:type] must not be nil" if params[:type].nil?
+    assertion_fails << "params[:properties] must not be nil" if params[:properties].nil?
+    assertion_fails << "params[:location] must not be nil" if params[:location].nil?
+    
+    raise assertion_fails if assertion_fails.size > 0
 
-     service["type"] = service_type
-     service["properties"] = service_properties
-     service["id"] = UUIDTools::UUID.timestamp_create().to_s
-     serviceList = Array.new
-     serviceList[0] = service
+    announcement = {}
+    announcement["pool"] = params[:pool]
+    announcement["environment"] = params[:environment]
+    announcement["type"] = params[:type]
+    announcement["properties"] = params[:properties]
+    announcement["location"] = params[:location]
 
-     # TODO: Parameterize pool and environment
+    @discovery_urls.each do |discovery_url|
 
-     announcement["pool"] = "general"
-     announcement["environment"] = "zapp_ci"
-     announcement["services"] = serviceList
+      announce_uri = URI.parse(discovery_url).merge("/v1/announcement/static")
 
-     @discovery_urls.each do |discovery_url|
+      json = JSON.generate(announcement)
+      if @verbose > 1
+        puts "Announce Request: " + announce_uri.to_s
+        puts "Announce Body: " + json
+      end
 
-        announce_uri = URI.parse(discovery_url).merge("/v1/announcement/#{nodeId}")
-
-        json = JSON.generate(announcement)
-        if @verbose > 1
-          puts "Announce Request: " + announce_uri.to_s
-          puts "Announce Body: " + json
+      begin
+        response = @client.post(announce_uri.to_s, json, {'Content-Type' => 'application/json'})
+        if response.status >= 200 && response.status <= 299
+          data = JSON.parse(response.body)
+          return data["id"]
         end
 
-        begin
-          response = @client.put(announce_uri.to_s, json, {'Content-Type' => 'application/json'})
-          if response.status >= 200 && response.status <= 299
-            return nodeId
-          end
-
-          stderr.puts("#{announce_uri.to_ss}: Reponse Status #{response.status}") if @verbose > 0
-
-        rescue
-          $stderr.puts("#{announce_uri.to_s}: #{$!}") if @verbose > 0
+        if @verbose > 0
+          $stderr.puts("#{announce_uri.to_s}: Response Status #{response.status}")
+          $stderr.puts(response.body)
+          $stderr.flush
         end
+
+      rescue
+        if @verbose > 0
+          $stderr.puts("#{announce_uri.to_s}: #{$!}")
+          $stderr.flush
+        end
+      end
     end
 
-    raise "Could not communicate with any of [ #{@discovery_urls.join(",")} ]"
+    raise "Failed to do business with any of [ #{@discovery_urls.join(",")} ]"
 
   end
 
   #
   # Delete the given nodeId from the service
   #
-  def delete(nodeId)
+  def static_delete(nodeId)
+
+    raise "NodeId must not be nil" if nodeId.nil?
 
     @discovery_urls.each do |discovery_url|
 
-      delete_uri = URI.parse(discovery_url).merge("/v1/announcement/#{nodeId}")
+      delete_uri = URI.parse(discovery_url).merge("/v1/announcement/static/#{nodeId}")
 
       puts "Delete Request: " + delete_uri.to_s if @verbose > 1
 
@@ -163,15 +179,22 @@ class DiscoveryClient
           return
         end
 
-        stderr.puts("#{delete_uri.to_s}: Response Status #{response.status}") if @verbose > 0
+        if @verbose > 0
+          $stderr.puts("#{delete_uri.to_s}: Response Status #{response.status}")
+          $stderr.puts(response.body)
+          $stderr.flush
+        end
 
       rescue
-        $stderr.puts("#{delete_uri.to_s}: #{$!}") if @verbose > 0
+        if @verbose > 0
+          $stderr.puts("#{delete_uri.to_s}: #{$!}")
+          $stderr.flush
+        end
       end
 
     end
 
-    raise "Could not communicate with any of [ #{@discovery_urls.join(",")} ]"
+    raise "Failed to do business with any of [ #{@discovery_urls.join(",")} ]"
 
   end
 
@@ -193,7 +216,6 @@ class DiscoveryClient
 
           if response.status >= 200 && response.status <= 299
              @service_data = JSON.parse(response.body)
-             @environment = @service_data["environment"]
              @services = {}
 
              @service_data["services"].each do |service|
@@ -208,15 +230,22 @@ class DiscoveryClient
              return
           end
 
-          $stderr.puts("#{service_uri.to_s}: Response Status #{response.status}") if @verbose > 0
+          if @verbose > 0
+            $stderr.puts("#{service_uri.to_s}: Response Status #{response.status}")
+            $stderr.puts(response.body)
+            $stderr.flush
+          end
 
         rescue
-          $stderr.puts("#{service_uri.to_s}: #{$!}") if @verbose > 0
+          if @verbose > 0
+            $stderr.puts("#{service_uri.to_s}: #{$!}")
+            $stderr.flush
+          end
         end
 
      end
 
-    raise "Could not communicate with any of [ #{@discovery_urls.join(",")} ]"
+    raise "Failed to do business with any of [ #{@discovery_urls.join(",")} ]"
 
   end
   
