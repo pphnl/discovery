@@ -4,7 +4,7 @@ require 'json'
 require 'uuidtools'
 
 #
-# This class mimics somewhat the structure of the Java discovery client.
+# Provide rudimentary, one-shot access to the discovery service.
 #
 class DiscoveryClient
 
@@ -93,7 +93,7 @@ class DiscoveryClient
 
   #
   # static_announce
-  #    PUT a service announcement to the discovery service
+  #    POST a static service announcement to the discovery service
   #
   #    Params - a single hash containing the following elements:
   #
@@ -161,7 +161,7 @@ class DiscoveryClient
   end
 
   #
-  # Delete the given nodeId from the service
+  # DELETE the given nodeId from the service
   #
   def static_delete(nodeId)
 
@@ -202,7 +202,7 @@ class DiscoveryClient
   private
 
   #
-  # Do a GET against the discovery service until one succeeds
+  # GET the contents of the discovery service
   #
   def query_for_services()
 
