@@ -9,17 +9,22 @@ require 'uuidtools'
 class DiscoveryClient
   @verbose = false
 
-  def initialize(discoveryUrl = "http://localhost:8080", verbose = false)
-    @verbose = verbose
-    puts "In constructor, #{discoveryUrl}, #{verbose}" if @verbose
-    @discoveryUrl = discoveryUrl
-    @serviceUri = URI.parse(@discoveryUrl).merge("/v1/service")
-    @services = @environment = @service_data = nil
-    @client = HTTPClient.new("")
+  #
+  # Constructor takes a scalar or list of service base URLs, and a verbosity flag
+  # Verbosity = 0: Run silent
+  # Verbosity = 1: Print errors
+  # Verbosity = 2: Print debug and errors
+  #
+  def initialize(discoveryUrls, verbose = 0)
+     @verbose = verbose
+     @discovery_urls = discoveryUrls.class.eql?(Array) ? discoveryUrls : [discoveryUrls]
+     @services = @environment = @service_data = nil
+     @client = HTTPClient.new("")
   end
 
   #
   # Return list of services matching pool and type
+  # nil values for pool and type act as wild cards
   #
   def get_services (type, pool)
     query_for_services()
@@ -85,6 +90,8 @@ class DiscoveryClient
   #    PUT a service announcement to the discovery service in the
   #    pool "general" and environment "zapp_ci"
   #
+  #    TODO: pool and environment need to be parameterized
+  #
   #    Params
   #
   #    service_type        The service type, e. g. smtp_service, user, customer, etc.
@@ -96,80 +103,120 @@ class DiscoveryClient
   #    delete method to delete the service announcement from the discovery server.
   #
   def announce(service_type, service_properties)
-    announcement = {}
-    service = {}
-    nodeId =  UUIDTools::UUID.timestamp_create().to_s
+     announcement = {}
+     service = {}
+     nodeId =  UUIDTools::UUID.timestamp_create().to_s
 
-    service["type"] = service_type
-    service["properties"] = service_properties
-    service["id"] = UUIDTools::UUID.timestamp_create().to_s
-    serviceList = Array.new
-    serviceList[0] = service
+     service["type"] = service_type
+     service["properties"] = service_properties
+     service["id"] = UUIDTools::UUID.timestamp_create().to_s
+     serviceList = Array.new
+     serviceList[0] = service
 
-    # TODO: Parameterize pool and environment
+     # TODO: Parameterize pool and environment
 
-    announcement["pool"] = "general"
-    announcement["environment"] = "zapp_ci"
-    announcement["services"] = serviceList
+     announcement["pool"] = "general"
+     announcement["environment"] = "zapp_ci"
+     announcement["services"] = serviceList
 
-    announceUri = URI.parse(@discoveryUrl).merge("/v1/announcement/#{nodeId}")
+     @discovery_urls.each do |discovery_url|
 
-    # Create announcement for specified service
-    json = JSON.generate(announcement)
-    if @verbose
-      puts "Announce Request: " + announceUri.to_s
-      puts "Announce Body: " + json
+        announce_uri = URI.parse(discovery_url).merge("/v1/announcement/#{nodeId}")
+
+        json = JSON.generate(announcement)
+        if @verbose > 1
+          puts "Announce Request: " + announce_uri.to_s
+          puts "Announce Body: " + json
+        end
+
+        begin
+          response = @client.put(announce_uri.to_s, json, {'Content-Type' => 'application/json'})
+          if response.status >= 200 && response.status <= 299
+            return nodeId
+          end
+
+          stderr.puts("#{announce_uri.to_ss}: Reponse Status #{response.status}") if @verbose > 0
+
+        rescue
+          $stderr.puts("#{announce_uri.to_s}: #{$!}") if @verbose > 0
+        end
     end
-    response = @client.put(announceUri.to_s, json, {'Content-Type' => 'application/json'})
-    if @verbose
-      puts "Announce response: " + response.to_s
-    end
-    if response.status < 200 || response.status > 300
-      raise response.body
-    end
 
-    return nodeId
+    raise "Could not communicate with any of [ #{@discovery_urls.join(",")} ]"
+
   end
 
   #
   # Delete the given nodeId from the service
   #
   def delete(nodeId)
-    deleteUri = URI.parse(@discoveryUrl).merge("/v1/announcement/#{nodeId}")
 
-    # Delete announcement for specified service
-    if @verbose
-      puts "Delete Request: " + deleteUri.to_s
+    @discovery_urls.each do |discovery_url|
+
+      delete_uri = URI.parse(discovery_url).merge("/v1/announcement/#{nodeId}")
+
+      puts "Delete Request: " + delete_uri.to_s if @verbose > 1
+
+      begin
+        response = @client.delete(delete_uri.to_s)
+        if response.status >= 200 && response.status <= 299
+          return
+        end
+
+        stderr.puts("#{delete_uri.to_s}: Response Status #{response.status}") if @verbose > 0
+
+      rescue
+        $stderr.puts("#{delete_uri.to_s}: #{$!}") if @verbose > 0
+      end
+
     end
-    response = @client.delete(deleteUri.to_s)
-    if response.status < 200 || response.status > 300
-      puts "Delete Announcement failed: " + deleteUri.to_s
-      raise response
-    end
+
+    raise "Could not communicate with any of [ #{@discovery_urls.join(",")} ]"
+
   end
 
 
   private
 
   #
-  # Do a GET against the discovery service for all services
+  # Do a GET against the discovery service until one succeeds
   #
   def query_for_services()
-    response = @client.get(@serviceUri.to_s, nil, nil)
-    raise response.body if response.status < 200 || response.status > 300
 
-    @service_data = JSON.parse(response.body)
-    @environment = @service_data["environment"]
-    @services = {}
-    
-    @service_data["services"].each do |service|
-      serviceType = service["type"]
-      if @services[serviceType].nil?
-        @services[serviceType] = [service]
-      else
-        @services[serviceType] << service
-      end
-    end
+     @discovery_urls.each do |discovery_url|
+        service_uri = URI.parse(discovery_url).merge("/v1/service")
+
+        puts "Get Request: " + service_uri.to_s if @verbose > 1
+
+        begin
+          response = @client.get(service_uri.to_s, nil, nil)
+
+          if response.status >= 200 && response.status <= 299
+             @service_data = JSON.parse(response.body)
+             @environment = @service_data["environment"]
+             @services = {}
+
+             @service_data["services"].each do |service|
+               service_type = service["type"]
+               if @services[service_type].nil?
+                 @services[service_type] = [service]
+               else
+                 @services[service_type] << service
+               end
+             end
+
+             return
+          end
+
+          $stderr.puts("#{service_uri.to_s}: Response Status #{response.status}") if @verbose > 0
+
+        rescue
+          $stderr.puts("#{service_uri.to_s}: #{$!}") if @verbose > 0
+        end
+
+     end
+
+    raise "Could not communicate with any of [ #{@discovery_urls.join(",")} ]"
 
   end
   
