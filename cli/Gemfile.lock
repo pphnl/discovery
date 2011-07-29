@@ -1,0 +1,24 @@
+GEM
+  remote: http://rubygems.org/
+  specs:
+    diff-lcs (1.1.2)
+    httpclient (2.2.1)
+    json_pure (1.5.3)
+    rspec (2.6.0)
+      rspec-core (~> 2.6.0)
+      rspec-expectations (~> 2.6.0)
+      rspec-mocks (~> 2.6.0)
+    rspec-core (2.6.4)
+    rspec-expectations (2.6.0)
+      diff-lcs (~> 1.1.2)
+    rspec-mocks (2.6.0)
+    uuidtools (2.1.2)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  httpclient
+  json_pure
+  rspec
+  uuidtools

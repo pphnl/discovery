@@ -209,7 +209,7 @@ class DiscoveryClient
      @discovery_urls.each do |discovery_url|
         service_uri = URI.parse(discovery_url).merge("/v1/service")
 
-        puts "Get Request: " + service_uri.to_s if @verbose > 1
+        puts "Get Request: #{service_uri.to_s}" if @verbose > 1
 
         begin
           response = @client.get(service_uri.to_s, nil, nil)
