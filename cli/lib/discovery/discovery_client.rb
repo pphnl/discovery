@@ -1,6 +1,7 @@
 require 'rubygems'
 require 'httpclient'
 require 'json'
+require 'Logger'
 
 #
 # Provide rudimentary, one-shot access to the discovery service.
@@ -9,14 +10,25 @@ module Discovery
   class Client
 
     #
-    # Constructor takes a scalar or list of service base URLs, and a verbosity flag
-    # Verbosity = 0: Run silent
-    # Verbosity = 1: Print errors
-    # Verbosity = 2: Print debug and errors
+    # Constructor takes a hash of parameters:
     #
-    def initialize(discoveryUrls, verbose = 0)
-       @discovery_urls = discoveryUrls.class.eql?(Array) ? discoveryUrls : [discoveryUrls]
-       @verbose = verbose
+    #    :DISCOVERY_URLS    list of discovery service base URLs
+    #    :LOG_LEVEL         Optional Integer logging level corresponding with the Ruby
+    ##                      Logger logging levals (DEBUG = 0, INFO =1,
+    #                       WARN = 2, ERROR = 3, FATAL = 4, UNKNOWN = 5)
+    #                       A new Ruby Logger object will be created at the given level.
+    #   :LOGGER             Optional Ruby Logger object, overrides :VERBOSITY
+    #
+    def initialize(params)
+       @discovery_urls = params[:DISCOVERY_URLS]
+       raise "Must specify list of discovery service URLS" if @discovery_urls.nil?
+       @logger = params[:LOGGER]
+       if @logger.nil?
+         @logger = Logger.new(STDOUT)
+         level = params[:VERBOSITY]
+         level ||= Logger::UNKNOWN
+         @logger.level = level
+       end
 
        @services = nil
        @service_data = nil
@@ -136,10 +148,8 @@ module Discovery
         announce_uri = URI.parse(discovery_url).merge("/v1/announcement/static")
 
         json = announcement.to_json
-        if @verbose > 1
-          puts "Announce Request: " + announce_uri.to_s
-          puts "Announce Body: " + json
-        end
+        @logger.debug("Announce Request: #{announce_uri.to_s}")
+        @logger.debug("Announce Body: #{json}")
 
         begin
           response = @client.post(announce_uri.to_s, json, {'Content-Type' => 'application/json'})
@@ -148,17 +158,11 @@ module Discovery
             return data["id"]
           end
 
-          if @verbose > 0
-            $stderr.puts("#{announce_uri.to_s}: Response Status #{response.status}")
-            $stderr.puts(response.body)
-            $stderr.flush
-          end
+          @logger.error("#{announce_uri.to_s}: Response Status #{response.status}")
+          @logger.error(response.body)
 
         rescue
-          if @verbose > 0
-            $stderr.puts("#{announce_uri.to_s}: #{$!}")
-            $stderr.flush
-          end
+          @logger.error("#{announce_uri.to_s}: #{$!}")
         end
       end
 
@@ -177,7 +181,7 @@ module Discovery
 
         delete_uri = URI.parse(discovery_url).merge("/v1/announcement/static/#{nodeId}")
 
-        puts "Delete Request: " + delete_uri.to_s if @verbose > 1
+        @logger.debug("Delete Request: #{delete_uri.to_s}")
 
         begin
           response = @client.delete(delete_uri.to_s)
@@ -185,17 +189,11 @@ module Discovery
             return
           end
 
-          if @verbose > 0
-            $stderr.puts("#{delete_uri.to_s}: Response Status #{response.status}")
-            $stderr.puts(response.body)
-            $stderr.flush
-          end
+          @logger.error("#{delete_uri.to_s}: Response Status #{response.status}")
+          @logger.error(response.body)
 
         rescue
-          if @verbose > 0
-            $stderr.puts("#{delete_uri.to_s}: #{$!}")
-            $stderr.flush
-          end
+          @logger.error("#{delete_uri.to_s}: #{$!}")
         end
 
       end
@@ -224,7 +222,7 @@ module Discovery
 
         service_uri = URI.parse(discovery_url).merge(resource)
 
-        puts "Get Request: #{service_uri.to_s}" if @verbose > 1
+        @logger.debug("Get Request: #{service_uri.to_s}")
 
         begin
           response = @client.get(service_uri.to_s, nil, nil)
@@ -245,17 +243,11 @@ module Discovery
              return
           end
 
-          if @verbose > 0
-            $stderr.puts("#{service_uri.to_s}: Response Status #{response.status}")
-            $stderr.puts(response.body)
-            $stderr.flush
-          end
+          @logger.error("#{service_uri.to_s}: Response Status #{response.status}")
+          @logger.error(response.body)
 
         rescue
-          if @verbose > 0
-            $stderr.puts("#{service_uri.to_s}: #{$!}")
-            $stderr.flush
-          end
+          @logger.error("#{service_uri.to_s}: #{$!}")
         end
 
     end

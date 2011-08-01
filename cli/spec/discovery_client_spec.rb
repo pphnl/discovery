@@ -12,52 +12,42 @@ describe "DiscoverClient Tests" do
 
   
   DISCOVERY_URLS = ["http://discovery.example.com:1234", "http://zapp1.eng.proofpoint.com:4111"]
+  @logger = Logger.new(STDOUT)
+  @logger.level = Logger::DEBUG
 
-  verbose = 1
+  dc = Discovery::Client.new({:DISCOVERY_URLS => DISCOVERY_URLS,
+                              :LOGGER => @logger})
 
-  dc = DiscoveryClient.new(DISCOVERY_URLS, verbose)
   it "Instantiate a discovery client" do
     dc.should_not be_nil
   end
 
   services = dc.get_services(nil, nil)
+  @logger.debug("All services:")
+  @logger.debug(services.inspect)
   it "Get the full list of services" do
     services.should_not be_nil
-    if verbose > 1
-      puts("All services:")
-      pp services
-      puts("\n")
-    end
   end
 
   services = dc.get_services("smtp_service", "general")
+  @logger.debug("smtp:general services:")
+  @logger.debug(services.inspect)
   it "Get just smtp general pool services" do
     services.should_not be_nil
-    if verbose > 1
-      puts("\n smtp:general services:")
-      pp services
-      puts("\n")
-    end
   end
 
   services = dc.get_services("smtp_service", nil)
+  @logger.debug("All smtp services:")
+  @logger.debug(services.inspect)
   it "Get all smtp services" do
     services.should_not be_nil
-    if verbose > 1
-      puts("\nAll smtp services:")
-      pp services
-      puts("\n")
-    end
   end
 
   services = dc.get_services(nil, "general")
+  @logger.debug("All general services:")
+  @logger.debug(services.inspect)
   it "Get all general pool services" do
     services.should_not be_nil
-    if verbose > 1
-      puts("\nAll general services:")
-      pp services
-      puts("\n")
-    end
   end
 
   static_id = dc.static_announce({
@@ -66,17 +56,16 @@ describe "DiscoverClient Tests" do
                       :pool => "dc_pool",
                       :location => "dc_location",
                       :properties => {"firstProperty" => "firstValue"}})
+  @logger.info("\nStatic announce ID: #{static_id}")
   it "Make a static announcement" do
-    static_id.should_not be_nil=
-    if verbose > 1
-    puts("\nStatic announce ID: #{static_id}")
-    puts("\n")
-    end
+    static_id.should_not be_nil
   end
 
   dc.static_delete(static_id)
+  @logger.info("Deleted #{static_id}\n")
   it "Delete a static announcement" do
-    puts("Deleted #{static_id}\n") if verbose > 1
+    # If we git this far, no exceptions were raised.
+    true.should be_true
   end
 
 end
