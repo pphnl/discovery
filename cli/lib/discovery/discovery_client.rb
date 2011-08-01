@@ -14,7 +14,7 @@ module Discovery
     #
     #    :DISCOVERY_URLS    list of discovery service base URLs
     #    :LOG_LEVEL         Optional Integer logging level corresponding with the Ruby
-    ##                      Logger logging levals (DEBUG = 0, INFO =1,
+    ##                      Logger logging levels (DEBUG = 0, INFO =1,
     #                       WARN = 2, ERROR = 3, FATAL = 4, UNKNOWN = 5)
     #                       A new Ruby Logger object will be created at the given level.
     #   :LOGGER             Optional Ruby Logger object, overrides :VERBOSITY
