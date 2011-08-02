@@ -1,0 +1,50 @@
+#!/usr/bin/env ruby
+require 'rubygems'
+require 'json'
+require 'SDiscoveryCommand'
+require 'discovery_client'
+require 'Logger'
+
+@parser = nil
+begin
+  parser = SDiscoveryCommand.new(ARGV)
+rescue
+  $stderr.puts($!)
+  exit 1
+end
+
+if parser.help?
+  puts(parser.help_message)
+  exit 0
+end
+
+discovery_client = Discovery::Client.new({:DISCOVERY_URLS => parser.hosts,:LOG_LEVEL => Logger::DEBUG})
+
+case parser.command
+
+  when "ADD"
+    announcement = {:pool => parser.static_announcement["pool"],
+                    :environment => parser.static_announcement["environment"],
+                    :type => parser.static_announcement["type"],
+                    :location => parser.static_announcement["location"],
+                    :properties => parser.static_announcement["properties"]
+    }
+    id = discovery_client.static_announce(announcement)
+    puts id
+    exit 0
+
+  when "SHOW"
+    services = discovery_client.get_static_services()
+    puts JSON.pretty_generate(services)
+    exit 0
+
+  when "DELETE"
+    discovery_client.static_delete(parser.id)
+    exit 0
+
+  else
+    $stderr.puts("huh?")
+    exit 1
+end
+
+
