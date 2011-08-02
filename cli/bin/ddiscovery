@@ -1,0 +1,26 @@
+#!/usr/bin/env ruby
+require 'rubygems'
+require 'json'
+require 'DDiscoveryCommand'
+require 'discovery_client'
+require 'Logger'
+
+@parser = nil
+begin
+  parser = DDiscoveryCommand.new(ARGV)
+rescue
+  $stderr.puts($!)
+  exit 1
+end
+
+if parser.help?
+  puts(parser.help_message)
+  exit 0
+end
+
+discovery_client = Discovery::Client.new({:DISCOVERY_URLS => parser.hosts,:LOG_LEVEL => Logger::DEBUG})
+
+services = discovery_client.get_services(parser.type, parser.pool)
+
+puts JSON.pretty_generate(services)
+
