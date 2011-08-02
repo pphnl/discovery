@@ -110,6 +110,40 @@ module Discovery
     end
 
     #
+    # GET the static service contents of the discovery service
+    #
+    # The REST API will support /type, and /type/pool queries,
+    # so if type is nil, pool must not be nil
+    #
+    def get_static_services()
+
+      @discovery_urls.each do |discovery_url|
+        resource = "/v1/announcement/static"
+
+        service_uri = URI.parse(discovery_url).merge(resource)
+
+        @logger.debug("Get Request: #{service_uri.to_s}")
+
+        begin
+          response = @client.get(service_uri.to_s, nil, nil)
+
+          if response.status >= 200 && response.status <= 299
+             return JSON.parse(response.body)
+          end
+
+          @logger.error("#{service_uri.to_s}: Response Status #{response.status}")
+          @logger.error(response.body)
+
+        rescue
+          @logger.error("#{service_uri.to_s}: #{$!}")
+        end
+
+      end
+
+      raise "Failed to do business with any of [ #{@discovery_urls.join(",")} ]"
+    end
+
+    #
     # static_announce
     #    POST a static service announcement to the discovery service
     #

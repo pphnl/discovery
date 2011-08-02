@@ -11,7 +11,7 @@ describe "DiscoverClient Tests" do
 ###
 
   
-  DISCOVERY_URLS = ["http://discovery.example.com:1234", "http://zapp1.eng.proofpoint.com:4111"]
+  DISCOVERY_URLS = ["http://discovery.example.com:1234", "http://zappdev1.eng.proofpoint.com:4111"]
   @logger = Logger.new(STDOUT)
   @logger.level = Logger::DEBUG
 
@@ -51,7 +51,7 @@ describe "DiscoverClient Tests" do
   end
 
   static_id = dc.static_announce({
-                      :environment => "zapp_integration",
+                      :environment => "zapp_ci",
                       :type => "dc_test",
                       :pool => "dc_pool",
                       :location => "dc_location",
@@ -59,6 +59,11 @@ describe "DiscoverClient Tests" do
   @logger.info("\nStatic announce ID: #{static_id}")
   it "Make a static announcement" do
     static_id.should_not be_nil
+  end
+
+  static_services = dc.get_static_services()
+  it "Get static services" do
+    static_services.should_not be_nil
   end
 
   dc.static_delete(static_id)
