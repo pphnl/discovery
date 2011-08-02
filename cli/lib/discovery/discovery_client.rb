@@ -168,7 +168,7 @@ module Discovery
       assertion_fails << "params[:properties] must not be nil" if params[:properties].nil?
       assertion_fails << "params[:location] must not be nil" if params[:location].nil?
 
-      raise assertion_fails if assertion_fails.size > 0
+      raise assertion_fails.join(",") if assertion_fails.size > 0
 
       announcement = {}
       announcement["pool"] = params[:pool]
