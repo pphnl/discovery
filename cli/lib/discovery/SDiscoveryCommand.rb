@@ -5,17 +5,32 @@ require 'json'
 # CLI parser for sdiscovery
 
 class SDiscoveryCommand
+
+  # Map of options that defined the operation.  See command().
   @option_map
+  
+  # Map of options that produced JSON - the @static_announcement
   @json_map
+  
+  # Array of hosts.  Defaults to 'http://localhost:8080'
   @hosts
+  
+  # Service ID when deleting
   @id
+  
+  # Static announcement to be JSON encoded
   @static_announcement
+  
+  # If help was needed, the message goes here.  See help?().
   @help_message
+  
   @show_parser
   @add_parser
   @delete_parser
 
   attr_reader :option_map, :json_map, :hosts, :id, :static_announcement, :help_message
+  
+  # Returns 'ADD', 'SHOW', 'DELETE', or 'HELP'
   def command ()
     return @option_map[:command]
   end
@@ -26,6 +41,7 @@ class SDiscoveryCommand
   end
 
   def initialize (args)
+    puts args.join(",")
     @option_map = {}
     @json_map = {}
 
@@ -36,8 +52,8 @@ class SDiscoveryCommand
         @help_message= help()
       end
 
-      opts.on('--output FMT', '-o', ['JSON', 'ID'], 'Output option: format JSON or ID') do |value|
-        @option_map[:output]=value
+      opts.on('--output FMT', '-o', %w{JSON json ID id}, 'Output option: format JSON or ID') do |value|
+        @option_map[:output]=value.upcase()
       end
     end
 
@@ -48,8 +64,8 @@ class SDiscoveryCommand
         @help_message= help()
       end
 
-      opts.on('--output FMT', '-o', ['JSON', 'ID'], 'Output option: format JSON or ID') do |value|
-        @option_map[:output]=value
+      opts.on('--output FMT', '-o', %w{JSON json ID id}, 'Output option: format JSON or ID') do |value|
+        @option_map[:output]=value.upcase()
       end
 
       opts.on('--environment ENVIRONMENT', '-e', "Service definition: environment") do |value|
@@ -116,7 +132,7 @@ class SDiscoveryCommand
   def err_extra_kv (args, usage)
     message= "Extra options:\n"
     args.each() {|k,v| message = message + "   --#{k}=#{v}\n"}
-    message = message + usage
+    message = message + usage.to_s()
     raise message
   end
 
@@ -124,30 +140,37 @@ class SDiscoveryCommand
   def err_extra_arg (args, usage)
     message= "Extra options:\n"
     args.each() {|v| message = message + "   #{v}\n"}
-    message = message + usage
+    message = message + usage.to_s()
     raise message
   end
 
-  # Shift off one argument and parse it as an alias in .discoveryrc or a hostname
+  # Shift off one argument and parse it as an alias in .discoveryrc or a hostname.
+  # Default is localhost entry in .disoveryrc or http://localhost:8080
   # Set result in @hosts array
   def parse_hosts (args)
-    hostname = args.shift()
-    if !hostname.nil?()
-      discoveryrc = File.expand_path("~/.discoveryrc")
-      aliasmap = {}
-      if File.readable?(discoveryrc)
-        File.readlines(discoveryrc).each {|line| line.scan(/(\w+)\s*=\s*(.*)/) {|k,v| aliasmap[k]=v}}
-      end
-      @hosts = (aliasmap[hostname] || hostname).split(',').map() {|host| host.strip()};
-    else
-      @hosts = nil
+    host_arg = (args.empty? || (args[0][0] == '-')) ? 'localhost' : args.shift()
+    discoveryrc = File.expand_path("~/.discoveryrc")
+    aliasmap = {}
+    if File.readable?(discoveryrc)
+      File.readlines(discoveryrc).each {|line| line.scan(/(\w+)\s*=\s*(.*)/) {|k,v| aliasmap[k]=v}}
     end
+
+    host_list = ''
+    if aliasmap.has_key?(host_arg)
+      host_list = aliasmap[host_arg]
+    elsif host_arg == 'localhost'
+      host_list = 'http://localhost:8080'
+    else
+      host_list = host_arg
+    end
+
+    @hosts = host_list.split(',').map() {|host| host.strip()};
     return @hosts
   end
 
   def parse_add_command (args)
     #Pull host
-    parse_hosts(args) || err_missing("hostname or hostname alias", @add_parser)
+    parse_hosts(args)
 
     # Pull -Dkey=value property arguments
     args.reject!() do |arg|
@@ -201,7 +224,7 @@ class SDiscoveryCommand
   end
 
   def parse_show_command (args)
-    parse_hosts(args) || err_missing("hostname or hostname alias", @show_parser)
+    parse_hosts(args)
 
     begin
       @show_parser.parse!(args)
@@ -215,7 +238,7 @@ class SDiscoveryCommand
   end
 
   def parse_delete_command (args)
-    parse_hosts(args) || err_missing("hostname or hostname alias", @delete_parser)
+    parse_hosts(args)
 
     begin
       @delete_parser.parse!(args)
