@@ -180,8 +180,8 @@ module Discovery
       @discovery_urls.each do |discovery_url|
 
         announce_uri = URI.parse(discovery_url).merge("/v1/announcement/static")
-
         json = announcement.to_json
+
         @logger.debug("Announce Request: #{announce_uri.to_s}")
         @logger.debug("Announce Body: #{json}")
 
@@ -191,7 +191,6 @@ module Discovery
             data = JSON.parse(response.body)
             return data["id"]
           end
-
           @logger.error("#{announce_uri.to_s}: Response Status #{response.status}")
           @logger.error(response.body)
 

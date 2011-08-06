@@ -269,7 +269,7 @@ public abstract class TestDynamicStore
         assertEqualsIgnoreOrder(store.getAll(), transform(red.getServiceAnnouncements(), toServiceWith(redNodeId, red.getLocation(), red.getPool())));
     }
 
-    @Test
+    @Test (enabled = false)
     public void testCanHandleLotsOfAnnouncements()
     {
         ImmutableSet.Builder<Service> builder = ImmutableSet.builder();

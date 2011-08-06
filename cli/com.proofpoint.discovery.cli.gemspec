@@ -13,8 +13,6 @@ Gem::Specification.new do |s|
   s.rubyforge_project = 'discovery'
   s.files = Dir['bin/**/*']
   s.files += Dir['lib/**/*']
-  s.executables << 'dcurl'
-  s.executables << 'djconsole'
   s.executables << 'ddiscovery'
   s.executables << 'sdiscovery'
   s.add_dependency 'httpclient', '>=2.2.0'
